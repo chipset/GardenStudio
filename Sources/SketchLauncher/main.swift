@@ -1,0 +1,2 @@
+import SketchUI
+runSketchMakeApplication()
