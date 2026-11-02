@@ -2,16 +2,16 @@
 import PackageDescription
 
 let package = Package(
-    name: "SketchMake",
+    name: "GardenStudio",
     platforms: [.macOS(.v13)],
-    products: [.executable(name: "SketchMake", targets: ["SketchMake"])],
+    products: [.executable(name: "GardenStudio", targets: ["GardenStudio"])],
     targets: [
-        .target(name: "SketchCore"),
-        .target(name: "SketchIO", dependencies: ["SketchCore"]),
-        .target(name: "SketchUI", dependencies: ["SketchCore", "SketchIO"], path: "Sources/SketchMake"),
-        .executableTarget(name: "SketchMake", dependencies: ["SketchUI"], path: "Sources/SketchLauncher"),
-        .testTarget(name: "SketchCoreTests", dependencies: ["SketchCore"]),
-        .testTarget(name: "SketchIOTests", dependencies: ["SketchIO", "SketchCore"]),
-        .testTarget(name: "SketchUITests", dependencies: ["SketchUI", "SketchCore", "SketchIO"])
+        .target(name: "GardenStudioCore"),
+        .target(name: "GardenStudioIO", dependencies: ["GardenStudioCore"]),
+        .target(name: "GardenStudioUI", dependencies: ["GardenStudioCore", "GardenStudioIO"], path: "Sources/GardenStudioApp"),
+        .executableTarget(name: "GardenStudio", dependencies: ["GardenStudioUI"], path: "Sources/GardenStudioLauncher"),
+        .testTarget(name: "GardenStudioCoreTests", dependencies: ["GardenStudioCore"]),
+        .testTarget(name: "GardenStudioIOTests", dependencies: ["GardenStudioIO", "GardenStudioCore"]),
+        .testTarget(name: "GardenStudioUITests", dependencies: ["GardenStudioUI", "GardenStudioCore", "GardenStudioIO"])
     ]
 )

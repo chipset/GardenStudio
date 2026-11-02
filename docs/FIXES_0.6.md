@@ -10,4 +10,4 @@ The audit running before the Woodwork exchange request also repaired these confi
 - Project export enforces the same 100 MB limit as project open/save before replacing a destination.
 - Saved-scene restoration uses set membership to avoid repeated full hidden/layer-list scans.
 
-Targeted regressions and existing workflow tests cover these changes. The [Woodwork exchange guide](WOODWORK_STUDIO.md) documents the new separate-item format and its bounds. The integrated suite passes 336 tests with zero failures. Release build, native Woodwork/Sketch Make roundtrip and extracted-app signature checks pass; see the exchange guide for the concrete evidence.
+Targeted regressions and existing workflow tests cover these changes. The [Woodwork exchange guide](WOODWORK_STUDIO.md) documents the new separate-item format and its bounds. The integrated suite passes 336 tests with zero failures. Release build, native Woodwork/Garden Studio roundtrip and extracted-app signature checks pass; see the exchange guide for the concrete evidence.

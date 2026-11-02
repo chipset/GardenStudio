@@ -1,6 +1,6 @@
 # Version 0.6.5
 
-This release publishes the Sketch Make source in GardenStudio, adds an installation and user guide, and removes SketchUp from project-owned source filenames and identifiers.
+This release publishes the Garden Studio source in GardenStudio, adds an installation and user guide, and removes SketchUp from project-owned source filenames and identifiers.
 
 ## Changes
 
@@ -11,7 +11,7 @@ This release publishes the Sketch Make source in GardenStudio, adds an installat
 
 ## Download
 
-Download `SketchMake-macOS.zip`, unzip it, and open `Sketch Make.app`. The main application requires Apple Silicon and macOS 13 or later. It is ad-hoc signed and is not notarized; see the user guide for macOS first-launch instructions.
+Download `GardenStudio-macOS.zip`, unzip it, and open `Garden Studio.app`. The main application requires Apple Silicon and macOS 13 or later. It is ad-hoc signed and is not notarized; see the user guide for macOS first-launch instructions.
 
 Native SKP/SKM exchange requires a separately installed compatible SDK. Vendor SDK libraries are not bundled. Built-in exchange codecs work without it. Refer to the [format matrix](FORMAT_MODES.md) for supported directions and limitations.
 

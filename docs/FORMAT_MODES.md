@@ -6,7 +6,7 @@ The File → Import/Export Compatibility window is the authoritative directional
 
 | Format/mode | Import | Export | Content and bounds |
 | --- | --- | --- | --- |
-| Sketch Make JSON | Yes | Yes | Full editable project with profiles, materials/UVs, groups/layers and presentation. Open restores everything; Import merges geometry/organization. |
+| Garden Studio JSON | Yes | Yes | Full editable project with profiles, materials/UVs, groups/layers and presentation. Open restores everything; Import merges geometry/organization. |
 | Woodwork Studio `.woodwork` | Yes, bundled helper | Yes, bundled helper | Separate items, not assemblies. Native detailed parts import and return while geometry is unchanged; new rectangular/circular stock exports. Inch/meter conversion, native names and placement. [Guide and limits](WOODWORK_STUDIO.md). |
 | COLLADA 1.4.1 DAE | Yes | Yes | Static triangles/lines, transforms, colors, face materials, PNG/JPEG textures and UVs. Meter/Y-up metadata. Keep generated texture folder beside file. |
 | KMZ | Yes | Yes | KML + COLLADA + texture package. Geometry exchange; georeferenced placement is not applied. Nonidentity local Scale/Orientation reject with flattening guidance. |
@@ -52,7 +52,7 @@ Referenced resources must be bounded and local. Malformed mesh/accessor/index da
 
 Apple USD modes also require the installed system usdcat utility. USDZ uses the bounded archive reader and a stored, 64-byte-aligned package writer; generated packages are checked with independent OpenUSD tools.
 
-Native SKP/SKM modes require the app helper plus a compatible separately installed SketchUpAPI framework. Discovery checks Cinema 4D 2026/2024/2023 and Adobe Dimension installations; SKETCHUP_SDK_PATH can select a framework binary. Only the app helper is shipped, with no vendor SDK libraries. See [native setup and fallback bridge](SKETCHUP_BRIDGE.md).
+Native SKP/SKM modes require the app helper plus a compatible separately installed SketchUpAPI framework. Discovery checks Cinema 4D 2026/2024/2023 and Adobe Dimension installations; SKETCHUP_SDK_PATH can select a framework binary. Only the app helper is shipped, with no vendor SDK libraries. See [native setup and fallback bridge](MODEL_SCRIPT_BRIDGE.md).
 
 Optional Assimp imports remain disabled when its required resource sandbox cannot be created. Optional exports can still work because their only input is the app's private, self-contained GLB; generated output is reconverted and checked before the destination is committed.
 

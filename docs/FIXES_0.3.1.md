@@ -15,7 +15,7 @@ This patch addresses the defects reproduced in the audit. Existing projects and 
 
 ## Regression coverage
 
-**135 tests pass with zero failures.** The native UI implementation is now a testable SketchUI module, with a small executable launcher. The normal SwiftPM test run covers native SceneKit bounds, camera history, clipboard responders and Follow Me integration in addition to core geometry and file exchange.
+**135 tests pass with zero failures.** The native UI implementation is now a testable GardenStudioUI module, with a small executable launcher. The normal SwiftPM test run covers native SceneKit bounds, camera history, clipboard responders and Follow Me integration in addition to core geometry and file exchange.
 
 Tests use an in-memory clipboard transport because the sandbox test runner cannot write to the macOS pasteboard service. The packaged app uses NSPasteboard.general; native GUI clipboard transport was verified in the packaged release: Copy/Paste 2→3 objects, Cut 3→2, Undo 2→3, Select All selected all three, and undoing Paste restored two. The original pair of 1 mm objects also rendered at matching sizes.
 

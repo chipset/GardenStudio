@@ -6,9 +6,9 @@ if [[ ! -f "$SDK_HEADERS/sketchup.h" ]]; then
   echo "Native SketchUp helper requires locally installed public SketchUp SDK headers." >&2
   exit 1
 fi
-INCLUDES=$(mktemp -d /private/tmp/sketchmake-native-includes.XXXXXX)
+INCLUDES=$(mktemp -d /private/tmp/gardenstudio-native-includes.XXXXXX)
 trap 'rm -rf "$INCLUDES"' EXIT
 ln -s "$SDK_HEADERS" "$INCLUDES/SketchUpAPI"
 mkdir -p artifacts/native
-clang++ -std=c++17 -fobjc-arc -framework Foundation -framework ImageIO -arch arm64 -arch x86_64 -mmacosx-version-min=13.0 -I"$INCLUDES" native/NativeMain.mm native/NativeModel.mm native/NativeMaterial.mm -o artifacts/native/SketchNativeWorker
-codesign --force --sign - artifacts/native/SketchNativeWorker
+clang++ -std=c++17 -fobjc-arc -framework Foundation -framework ImageIO -arch arm64 -arch x86_64 -mmacosx-version-min=13.0 -I"$INCLUDES" native/NativeMain.mm native/NativeModel.mm native/NativeMaterial.mm -o artifacts/native/GardenStudioNativeWorker
+codesign --force --sign - artifacts/native/GardenStudioNativeWorker

@@ -4,15 +4,15 @@ See the current [directional format matrix and controls](FORMAT_MODES.md) for al
 
 ## SketchUp Make 2017
 
-When a compatible local SketchUp SDK and the app helper are available, use Import/Export for native SKP static geometry. SKP export targets the 2017 file version. Native exchange retains supported faces, loose edges, world transforms, basic colors and diffuse texture/UV data; group names/material buckets are flattened. SketchUp editing hierarchy, cameras, tags, undo state and extension data are not transferred. Save an editable Sketch Make JSON project to retain this app's project state.
+When a compatible local SketchUp SDK and the app helper are available, use Import/Export for native SKP static geometry. SKP export targets the 2017 file version. Native exchange retains supported faces, loose edges, world transforms, basic colors and diffuse texture/UV data; group names/material buckets are flattened. SketchUp editing hierarchy, cameras, tags, undo state and extension data are not transferred. Save an editable Garden Studio JSON project to retain this app's project state.
 
 For native SKM materials, open the Materials panel and use Import/Export SketchUp Material. Import loads a material into the editor; Apply Material paints the current selection. A single opaque PNG/JPEG texture and equal-axis physical repeat size are supported. Rotation, per-face overrides and unequal-axis texture sizes reject. SKM is not a 3D model file.
 
-[SDK discovery and setup](SKETCHUP_BRIDGE.md) covers separately installed Cinema 4D/Adobe Dimension frameworks, the SKETCHUP_SDK_PATH override and the helper. No vendor libraries are shipped with Sketch Make.
+[SDK discovery and setup](MODEL_SCRIPT_BRIDGE.md) covers separately installed Cinema 4D/Adobe Dimension frameworks, the SKETCHUP_SDK_PATH override and the helper. No vendor libraries are shipped with Garden Studio.
 
 COLLADA DAE remains a portable route for static geometry, diffuse colors, texture sidecars and UVs; enable triangulation in the source. Keep the generated texture folder beside a DAE. KMZ packages those resources into one file, with no claim of georeferenced placement. Nonidentity KML model scale/orientation must be flattened before import. In Make, use File → Export → 3D Model → COLLADA; import that file here. For the return route, export DAE/KMZ here and import it in Make.
 
-The [Make-side Ruby bridge](SKETCHUP_BRIDGE.md) remains available when the compatible SDK/helper is missing or a SketchUp-hosted workflow is preferred. SketchUp itself then opens/saves SKP/SKM files and exchanges the supported geometry through bridge JSON.
+The [Make-side Ruby bridge](MODEL_SCRIPT_BRIDGE.md) remains available when the compatible SDK/helper is missing or a SketchUp-hosted workflow is preferred. SketchUp itself then opens/saves SKP/SKM files and exchanges the supported geometry through bridge JSON.
 
 Free desktop Make's formats differ from Pro and modern subscriptions. [Official SketchUp export API](https://ruby.sketchup.com/Sketchup/Model.html#export-instance_method), [COLLADA guide](https://help.sketchup.com/en/sketchup/importing-and-exporting-collada-files).
 

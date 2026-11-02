@@ -17,4 +17,4 @@ Each change has regression coverage, with actual native SDK/native USD-reader ev
 
 Remaining format and feature limits are in [FORMAT_MODES.md](FORMAT_MODES.md). Scalar transparency, projective textures without baking, native CRV/DWG jobs and full SketchUp authoring-state preservation remain outside the supported subset.
 
-Full suite: /private/tmp/sketchmake-052-full-tests.log. Release build: /private/tmp/sketchmake-052-build.log. Native UI fixture: artifacts/exports/Audit 0.5.2 line.sketchmake.json.
+Full suite: /private/tmp/gardenstudio-052-full-tests.log. Release build: /private/tmp/gardenstudio-052-build.log. Native UI fixture: artifacts/exports/Audit 0.5.2 line.gardenstudio.json.

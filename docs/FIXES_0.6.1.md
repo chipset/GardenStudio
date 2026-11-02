@@ -18,4 +18,4 @@ Woodwork items remain independent, without forced assemblies or combined meshes.
 
 The final combined suite passes 363 tests with zero failures and no native-test skips. Native UI checks imported the formerly crashing SVG arc and roundtripped two independent Woodwork parts with exact 261-character material labels. The rebuilt native app closes after exactly one Discard click. The v0.6.1 release build and extracted ZIP strict deep code-signature check pass. Both bundled helpers pass actual native read/write checks; Woodwork separate-item identity and exact material names remain intact.
 
-Final suite: /private/tmp/sketchmake-061-final-tests.log. Delivery build: /private/tmp/sketchmake-061-delivery-build.log. Native roundtrip example: artifacts/exports/Woodwork long labels 0.6.1.woodwork.
+Final suite: /private/tmp/gardenstudio-061-final-tests.log. Delivery build: /private/tmp/gardenstudio-061-delivery-build.log. Native roundtrip example: artifacts/exports/Woodwork long labels 0.6.1.woodwork.

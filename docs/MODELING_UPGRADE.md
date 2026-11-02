@@ -46,7 +46,7 @@ Drawing Axes relocates the origin. View → Set Drawing Axes accepts an origin, 
 
 Old project JSON still opens. New JSON preserves editor state, groups/layers, profiles, materials, scenes and annotations. DXF exports retained polygon outlines and holes without triangle edges. Arbitrary surface meshes without a retained profile still require STL/DAE; the app does not infer CNC contours/toolpaths.
 
-Native SKP/SKM workflows use a separately installed compatible SketchUp SDK in a helper process. Extensions → Install SketchUp Make Bridge saves an optional .rb script to a chosen location for Make-hosted fallback workflows. See [bridge instructions](SKETCHUP_BRIDGE.md).
+Native SKP/SKM workflows use a separately installed compatible SketchUp SDK in a helper process. Extensions → Install SketchUp Make Bridge saves an optional .rb script to a chosen location for Make-hosted fallback workflows. See [bridge instructions](MODEL_SCRIPT_BRIDGE.md).
 
 Run Ruby Script supports a limited creation API for trusted local scripts. It runs asynchronously with time/output limits and undoable results, using account file/network permissions. It is not a full SketchUp Ruby extension runtime; third-party extensions still require SketchUp.
 
@@ -54,4 +54,4 @@ Run Ruby Script supports a limited creation API for trusted local scripts. It ru
 
 **109 automated tests pass with zero failures.** Tests cover topology, holes, winding/volume, transforms/locks, nested selection, component safety, project compatibility, scene snapshots, material repainting, texture containment, actual text meshes, exchange formats and Ruby limits. Native checks verified expanded menus, material panel, section cuts/shadows/dimensions and a 100 mm offset changing a 5.4 × 3.8 m profile to 5.6 × 4.0 m.
 
-The example project is artifacts/Modeling Upgrade Showcase.sketchmake.json. Make-hosted bridge actions and Windows VCarve runtime round-trips remain unverified; those external-runtime gaps are separate from local tests/native app checks.
+The example project is artifacts/Modeling Upgrade Showcase.gardenstudio.json. Make-hosted bridge actions and Windows VCarve runtime round-trips remain unverified; those external-runtime gaps are separate from local tests/native app checks.

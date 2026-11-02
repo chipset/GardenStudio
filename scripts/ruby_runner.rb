@@ -14,7 +14,7 @@ class Numeric
   def m; to_f / 0.0254; end
 end
 
-module SketchMake
+module GardenStudio
   class << self
     attr_accessor :document
   end
@@ -38,7 +38,7 @@ module SketchMake
   class Face
     attr_accessor :material
     def initialize(points)
-      @points = points.map { |p| SketchMake.point(p) }
+      @points = points.map { |p| GardenStudio.point(p) }
       @distance = nil; @material = '#E7DCC8'
       raise ArgumentError, 'add_face requires at least three points' if @points.length < 3
       a = @points[1].zip(@points[0]).map { |x,y| x-y }; b = @points[2].zip(@points[0]).map { |x,y| x-y }
@@ -84,22 +84,22 @@ module SketchMake
       else
         (1...(count-1)).each { |i| triangles += [0,i,i+1] }
       end
-      SketchMake.mesh_entity(name, points, triangles, [], @material)
+      GardenStudio.mesh_entity(name, points, triangles, [], @material)
     end
   end
   class Edge
-    def initialize(a,b); @points=[SketchMake.point(a),SketchMake.point(b)]; end
+    def initialize(a,b); @points=[GardenStudio.point(a),GardenStudio.point(b)]; end
     def output(name, translation)
       points=@points.map { |p| p.zip(translation).map { |x,y| x+y } }
       raise ArgumentError, 'Line must have nonzero length' if points[0] == points[1]
-      SketchMake.mesh_entity(name, points, [], [0,1], '#353B3C')
+      GardenStudio.mesh_entity(name, points, [], [0,1], '#353B3C')
     end
   end
   class Group
     attr_accessor :name
     attr_reader :entities
     def initialize; @name='Ruby group'; @entities=Entities.new; @translation=[0,0,0]; end
-    def move!(point); @translation=SketchMake.point(point); self; end
+    def move!(point); @translation=GardenStudio.point(point); self; end
     def output(parent_name, translation)
       @entities.output(@name, @translation.zip(translation).map { |x,y| x+y })
     end
@@ -124,19 +124,19 @@ module SketchMake
   end
 end
 module Sketchup
-  def self.active_model; @model ||= SketchMake::Model.new; end
+  def self.active_model; @model ||= GardenStudio::Model.new; end
 end
 
 begin
   input=JSON.parse(STDIN.read)
   raise ArgumentError, 'Expected a model document' unless input.is_a?(Hash) && input['entities'].is_a?(Array) && input['name'].is_a?(String)
-  SketchMake.document=input
+  GardenStudio.document=input
   # Keep debug puts away from the JSON response stream.
   $stdout=$stderr
   load File.expand_path(ARGV.fetch(0))
-  SketchMake.document['entities'].concat(Sketchup.active_model.entities.output)
-  raise ArgumentError, 'Too many entities' if SketchMake.document['entities'].length > 50_000
-  STDOUT.write(JSON.generate(SketchMake.document))
+  GardenStudio.document['entities'].concat(Sketchup.active_model.entities.output)
+  raise ArgumentError, 'Too many entities' if GardenStudio.document['entities'].length > 50_000
+  STDOUT.write(JSON.generate(GardenStudio.document))
 rescue Exception => error
   STDERR.write("#{error.class}: #{error.message}\n")
   exit 1

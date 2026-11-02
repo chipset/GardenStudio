@@ -23,4 +23,4 @@ Validation includes focused red/green regressions, the combined suite, real Sket
 
 Intentional format limits remain in [FORMAT_MODES.md](FORMAT_MODES.md). Native SKP exchange flattens static geometry and does not preserve full authoring state. Full third-party extensions, native CRV/DWG jobs and Windows VCarve runtime are outside this audit's verified support.
 
-Verified project fixture: artifacts/exports/Audit 0.5.1.sketchmake.json. Full test log: /private/tmp/sketchmake-051-full-tests.log. Release build log: /private/tmp/sketchmake-051-build.log.
+Verified project fixture: artifacts/exports/Audit 0.5.1.gardenstudio.json. Full test log: /private/tmp/gardenstudio-051-full-tests.log. Release build log: /private/tmp/gardenstudio-051-build.log.
