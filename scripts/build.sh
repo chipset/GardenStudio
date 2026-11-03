@@ -10,7 +10,9 @@ if [[ -f "${WCORE_SOURCE_ROOT:-/Users/thomas/Documents/source/woodworking-studio
   ./scripts/build-woodwork.sh
 fi
 swift build --disable-sandbox --build-system native -c release -Xswiftc -gnone
-APP="$PWD/artifacts/Garden Studio.app"
+STAGE=$(mktemp -d /private/tmp/gardenstudio-app-stage.XXXXXX)
+trap 'rm -rf "$STAGE"' EXIT
+APP="$STAGE/Garden Studio.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/GardenStudio "$APP/Contents/MacOS/GardenStudio.next"
 mv -f "$APP/Contents/MacOS/GardenStudio.next" "$APP/Contents/MacOS/GardenStudio"
@@ -38,5 +40,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 PLIST
 xattr -cr "$APP"
 codesign --force --sign - "$APP"
+codesign --verify --deep --strict "$APP"
 ditto -c -k --norsrc --noextattr --keepParent "$APP" artifacts/GardenStudio-macOS.zip
-echo "$APP"
+ditto --norsrc --noextattr "$APP" "$PWD/artifacts/Garden Studio.app"
+codesign --verify --deep "$PWD/artifacts/Garden Studio.app"
+echo "$PWD/artifacts/Garden Studio.app"
