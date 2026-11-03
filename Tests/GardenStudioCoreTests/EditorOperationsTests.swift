@@ -2,6 +2,47 @@ import XCTest
 @testable import GardenStudioCore
 
 final class EditorOperationsTests: XCTestCase {
+    func testTranslateDoesNotMoveHiddenSelectedObject() throws {
+        var hidden = box()
+        hidden.metadata = EntityMetadata(isHidden: true)
+        let document = ModelDocument(entities: [hidden])
+
+        let moved = try EditorOperations.translate(document: document, ids: [hidden.id], delta: Vec3(1, 0, 0))
+
+        XCTAssertEqual(moved.entities[0].origin, hidden.origin)
+    }
+
+    func testTranslateMovesVisibleSelectionWithoutMovingHiddenPeer() throws {
+        let visible = box()
+        var hidden = box(3)
+        hidden.metadata = EntityMetadata(isHidden: true)
+        let document = ModelDocument(entities: [visible, hidden])
+
+        let moved = try EditorOperations.translate(document: document, ids: [visible.id, hidden.id], delta: Vec3(1, 0, 0))
+
+        XCTAssertEqual(moved.entities[0].origin, Vec3(1, 0, 0))
+        XCTAssertEqual(moved.entities[1].origin, hidden.origin)
+    }
+
+    func testHiddenSelectedObjectCanStillBeShown() throws {
+        var hidden = box()
+        hidden.metadata = EntityMetadata(isHidden: true)
+        let document = ModelDocument(entities: [hidden])
+
+        let shown = try EditorOperations.setHidden(document: document, ids: [hidden.id], hidden: false)
+
+        XCTAssertFalse(try XCTUnwrap(shown.entities[0].metadata).isHidden)
+    }
+
+    func testHiddenSelectedObjectCannotBeRotatedScaledOrDuplicated() throws {
+        var hidden = box()
+        hidden.metadata = EntityMetadata(isHidden: true)
+        let document = ModelDocument(entities: [hidden])
+
+        XCTAssertEqual(try EditorOperations.rotate(document: document, ids: [hidden.id], radians: .pi / 2), document)
+        XCTAssertEqual(try EditorOperations.scale(document: document, ids: [hidden.id], factors: Vec3(2, 2, 2)), document)
+        XCTAssertEqual(try EditorOperations.duplicate(document: document, ids: [hidden.id], count: 1, delta: Vec3(1, 0, 0)), document)
+    }
     func box(_ x: Double = 0) -> GardenEntity { GardenEntity(kind: .rectangle, origin: Vec3(x,0,0), width: 2, depth: 2, height: 2) }
     func testOriginalJSONDecodesWithoutEditorMetadata() throws {
         let source = """
@@ -100,6 +141,8 @@ final class EditorOperationsTests: XCTestCase {
         doc = try EditorOperations.setLocked(document:doc,ids:[a.id],locked:true)
         XCTAssertFalse(doc.entities[0].isEditable(in:doc))
         doc = try EditorOperations.setLocked(document:doc,ids:[a.id],locked:false)
+        XCTAssertFalse(doc.entities[0].isEditable(in:doc))
+        doc.editor!.layers[0].isVisible = true
         XCTAssertTrue(doc.entities[0].isEditable(in:doc))
     }
     func testOrganizationValidationRejectsCyclesAndMissingReferences() throws {

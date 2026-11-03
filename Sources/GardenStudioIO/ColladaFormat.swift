@@ -245,20 +245,79 @@ public enum ColladaFormat {
         <library_visual_scenes><visual_scene id="scene" name="\(escape(document.name))">\(nodes.joined())</visual_scene></library_visual_scenes><scene><instance_visual_scene url="#scene"/></scene></COLLADA>
         """
         guard xml.utf8.count <= 64 * 1024 * 1024 else { throw GeometryIOError.invalid("The generated COLLADA document exceeds the 64 MB limit.") }
-        if !textureFiles.isEmpty {
-            let directory=url.deletingLastPathComponent().appendingPathComponent(textureFolder,isDirectory:true)
-            let base=url.deletingLastPathComponent().resolvingSymlinksInPath().standardizedFileURL.path
-            guard directory.resolvingSymlinksInPath().standardizedFileURL.path.hasPrefix(base+"/") else { throw GeometryIOError.unsupported("The texture folder resolves outside the export directory.") }
-            try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
-            for (name,data) in textureFiles {
-                let target=directory.appendingPathComponent(name)
-                guard target.resolvingSymlinksInPath().standardizedFileURL.path.hasPrefix(directory.resolvingSymlinksInPath().standardizedFileURL.path + "/") else { throw GeometryIOError.unsupported("A texture sidecar resolves outside its export folder.") }
-                if FileManager.default.fileExists(atPath:target.path) {
-                    guard try Data(contentsOf:target)==data else { throw GeometryIOError.invalid("An existing texture sidecar has different content; choose another export location.") }
-                } else { try data.write(to:target,options:.atomic) }
-            }
+        try writeBundle(Data(xml.utf8),textures:textureFiles,folder:textureFolder,to:url)
+    }
+
+    /// Install images before the DAE, retaining the previous DAE and removing
+    /// newly installed images if any step fails.
+    private static func writeBundle(_ dae:Data,textures:[String:Data],folder:String,to url:URL)throws {
+        let manager=FileManager.default
+        guard url.isFileURL else {throw GeometryIOError.invalid("COLLADA export requires a local file.")}
+        if textures.isEmpty {try dae.write(to:url,options:.atomic);return}
+        let parent=url.deletingLastPathComponent()
+        let directory=parent.appendingPathComponent(folder,isDirectory:true)
+        let base=parent.resolvingSymlinksInPath().standardizedFileURL.path
+        guard directory.resolvingSymlinksInPath().standardizedFileURL.path.hasPrefix(base+"/") else {throw GeometryIOError.unsupported("The texture folder resolves outside the export directory.")}
+        var daePermissions:NSNumber?
+        if manager.fileExists(atPath:url.path) {
+            let attributes=try manager.attributesOfItem(atPath:url.path)
+            guard attributes[.type] as? FileAttributeType == .typeRegular else {throw GeometryIOError.invalid("A COLLADA export destination is not a regular file.")}
+            daePermissions=attributes[.posixPermissions] as? NSNumber
         }
-        try xml.write(to:url,atomically:true,encoding:.utf8)
+        if manager.fileExists(atPath:directory.path) {
+            let attributes=try manager.attributesOfItem(atPath:directory.path)
+            guard attributes[.type] as? FileAttributeType == .typeDirectory else {throw GeometryIOError.invalid("The COLLADA texture destination is not a directory.")}
+        }
+        var missing:[(URL,Data)]=[]
+        for name in textures.keys.sorted() {
+            let target=directory.appendingPathComponent(name)
+            guard target.resolvingSymlinksInPath().standardizedFileURL.path.hasPrefix(directory.resolvingSymlinksInPath().standardizedFileURL.path+"/") else {throw GeometryIOError.unsupported("A texture sidecar resolves outside its export folder.")}
+            let data=textures[name]!
+            if manager.fileExists(atPath:target.path) {
+                guard try Data(contentsOf:target)==data else {throw GeometryIOError.invalid("An existing texture sidecar has different content; choose another export location.")}
+            } else {missing.append((target,data))}
+        }
+        let work=parent.appendingPathComponent(".gardenstudio-dae-"+UUID().uuidString,isDirectory:true)
+        try manager.createDirectory(at:work,withIntermediateDirectories:false,attributes:[.posixPermissions:0o700])
+        var retainRecovery=false
+        defer {if !retainRecovery {try? manager.removeItem(at:work)}}
+        for (index,item) in missing.enumerated() {try item.1.write(to:work.appendingPathComponent("image-\(index)"),options:.atomic)}
+        let stagedDAE=work.appendingPathComponent("model.dae")
+        try dae.write(to:stagedDAE,options:.atomic)
+        if let mode=daePermissions {try manager.setAttributes([.posixPermissions:mode],ofItemAtPath:stagedDAE.path)}
+        var madeDirectory=false,installed:[URL]=[],backup:URL?
+        do {
+            if !textures.isEmpty && !manager.fileExists(atPath:directory.path) {
+                try manager.createDirectory(at:directory,withIntermediateDirectories:false)
+                madeDirectory=true
+            }
+            for (index,item) in missing.enumerated() {
+                try manager.moveItem(at:work.appendingPathComponent("image-\(index)"),to:item.0)
+                installed.append(item.0)
+            }
+            if manager.fileExists(atPath:url.path) {
+                let saved=work.appendingPathComponent("old.dae")
+                try manager.moveItem(at:url,to:saved)
+                backup=saved
+            }
+            try manager.moveItem(at:stagedDAE,to:url)
+        } catch {
+            var recoveryFailed=false
+            if let backup {
+                do {try manager.moveItem(at:backup,to:url)} catch {recoveryFailed=true}
+            }
+            for image in installed.reversed() {
+                do {try manager.removeItem(at:image)} catch {recoveryFailed=true}
+            }
+            if madeDirectory {
+                do {try manager.removeItem(at:directory)} catch {recoveryFailed=true}
+            }
+            if recoveryFailed {
+                retainRecovery=true
+                throw GeometryIOError.invalid("COLLADA export failed and could not restore every file. Recovery copies remain in \(work.path).")
+            }
+            throw error
+        }
     }
 
     private static func rgbString(_ hex: String) -> String {

@@ -28,6 +28,14 @@ final class ColladaMaterialTests: XCTestCase {
         XCTAssertEqual(read.entities[0].surface?.textureScale ?? 0,0.5,accuracy:1e-8)
         XCTAssertEqual(read.entities[0].surface?.textureRotation ?? 0,.pi/4,accuracy:1e-8)
     }
+    func testBlockedDAEDestinationLeavesNoTextureSidecars() throws {
+        let dir = try folder(); defer { try? FileManager.default.removeItem(at:dir) }
+        let url = dir.appendingPathComponent("model.dae")
+        try FileManager.default.createDirectory(at:url,withIntermediateDirectories:false)
+        XCTAssertThrowsError(try ColladaFormat.write(model(),to:url))
+        XCTAssertFalse(FileManager.default.fileExists(atPath:dir.appendingPathComponent("model-textures").path))
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath:dir.path).allSatisfy { !$0.hasPrefix(".gardenstudio-dae-") })
+    }
     func testPerFaceMaterialBindingsSurviveImport() throws {
         let dir = try folder(); defer { try? FileManager.default.removeItem(at:dir) }
         let url = dir.appendingPathComponent("faces.dae")

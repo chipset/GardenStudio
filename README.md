@@ -2,7 +2,9 @@
 
 Native macOS 3D modeling for designing studios, buildings and other models.
 
-[Download the latest release](https://github.com/chipset/GardenStudio/releases/latest) · [Installation and user guide](docs/USER_GUIDE.md) · [Release notes](docs/RELEASE_0.6.7.md)
+[Download the latest release](https://github.com/chipset/GardenStudio/releases/latest) · [Installation and user guide](docs/USER_GUIDE.md) · [Release notes](docs/RELEASE_0.6.8.md)
+
+Version 0.6.8 fixes exact-depth cutting during a drag, hidden-object editing, stale Layers panels, and incomplete COLLADA exports.
 
 Version 0.6.7 fixes inward Push/Pull cutting: drawn profiles can create recesses and through-holes in supported solids. [Supported cuts and limits](docs/RELEASE_0.6.7.md).
 

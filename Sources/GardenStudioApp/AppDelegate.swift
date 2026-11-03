@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     var syncingSelection = false
     var suppressLinkedSync = false
     var auxiliaryPanels: [NSWindow] = []
+    var layerToggleIDs: [ObjectIdentifier: UUID] = [:]
     var materialsPanel: MaterialsPanelController?
     let snapLabel = NSTextField(labelWithString: "")
     var toolButtons: [ModelingTool: NSButton] = [:]
@@ -332,7 +333,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     }
     @objc func newModel() { guard mayDiscard() else { return }; reset(ModelDocument()) }
     @objc func loadDemo() { guard mayDiscard() else { return }; reset(.demo) }
-    func reset(_ next: ModelDocument, url: URL? = nil) { viewport.cancelOperation(); viewport.editingGroupID = nil; document = next; currentURL = url; history = ModelHistory(); selected = nil; selection = []; dirty = false; refresh(); if let camera = next.presentation?.camera { viewport.applyCamera(camera) } else { viewport.zoomExtents() } }
+    func reset(_ next: ModelDocument, url: URL? = nil) { viewport.cancelOperation(); viewport.editingGroupID = nil; layerToggleIDs.removeAll(); document = next; currentURL = url; history = ModelHistory(); selected = nil; selection = []; dirty = false; refresh(); if let camera = next.presentation?.camera { viewport.applyCamera(camera) } else { viewport.zoomExtents() } }
     @objc func openModel() {
         guard mayDiscard() else { return }; let panel = NSOpenPanel(); panel.allowedContentTypes = [.json]; panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }

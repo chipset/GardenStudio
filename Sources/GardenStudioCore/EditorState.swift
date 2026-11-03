@@ -128,5 +128,5 @@ extension GardenEntity {
         if let layerID = metadata?.layerID { return document.editor?.layers.first { $0.id == layerID }?.isVisible ?? false }
         return true
     }
-    public func isEditable(in document: ModelDocument) -> Bool { metadata?.isLocked != true }
+    public func isEditable(in document: ModelDocument) -> Bool { metadata?.isLocked != true && isVisible(in: document) }
 }

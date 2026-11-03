@@ -59,7 +59,8 @@ public enum EditorOperations {
     public static func translate(document: ModelDocument, ids: Set<UUID>, delta: Vec3, editingGroupID: UUID? = nil) throws -> ModelDocument {
         guard finite(delta) else { throw GeometryIOError.invalid("Translation must contain finite distances.") }
         try document.validate()
-        let selected = editable(document,ids,editingGroupID:editingGroupID), groups = affectedGroups(document,editable(document,ids,editingGroupID:editingGroupID),editingGroupID:editingGroupID)
+        let selected = editable(document,ids,editingGroupID:editingGroupID)
+        let groups = affectedGroups(document,selected,editingGroupID:editingGroupID)
         var result = document
         for index in result.entities.indices where selected.contains(result.entities[index].id) { result.entities[index].origin = add(result.entities[index].origin,delta) }
         if var editor = result.editor {

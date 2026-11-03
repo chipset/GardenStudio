@@ -1141,16 +1141,20 @@ final class ModelViewport: SCNView {
             case .move:commit(try EditorOperations.translate(document:document,ids:selectedIDs,delta:Vec3(values[0],values.count>1 ? values[1]:0,values.count>2 ? values[2]:0),editingGroupID:editingGroupID));return
             default:break
             }
-            guard let id=selectedID,let index=document.entities.firstIndex(where:{$0.id==id}),document.entities[index].isEditable(in:document) else {onStatus?("Select an unlocked object first.");return}
+            let activeProfileDrag = tool == .pushPull && dragDocument != nil && dragEntity != nil && pendingCutSelectionID != nil
+            let selectionDocument = activeProfileDrag ? dragDocument! : document
+            guard let id=activeProfileDrag ? dragEntity?.id : selectedID,
+                  let index=selectionDocument.entities.firstIndex(where:{$0.id==id}),
+                  selectionDocument.entities[index].isEditable(in:selectionDocument) else {onStatus?("Select an unlocked object first.");return}
             var next=document,newExtrusionID:UUID?,cutOriginal:ModelDocument?,cutProfileID:UUID?,pushPullSelectionID:UUID?
             if tool == .pushPull {
                 if let pickedProfile {var shape=try GeometryTools.extrude(entity:pickedProfile,distance:values[0]);shape.name="Face extrusion";next.entities.append(shape);newExtrusionID=shape.id}
                 else {
-                    var baseline=lastCutMeasurement?.original ?? document
+                    var baseline=activeProfileDrag ? selectionDocument : (lastCutMeasurement?.original ?? document)
                     // Retyping a depth replaces the preceding cut from its original
                     // profile, while preserving any intervening camera navigation.
                     baseline.presentation=document.presentation
-                    let profileID=lastCutMeasurement?.profileID ?? id
+                    let profileID=activeProfileDrag ? id : (lastCutMeasurement?.profileID ?? id)
                     next=try GeometryTools.pushPull(document:baseline,profileID:profileID,distance:values[0],editingGroupID:editingGroupID)
                     if let resultID=cutResultID(original:baseline,result:next,profileID:profileID) {
                         cutOriginal=baseline;cutProfileID=profileID;pushPullSelectionID=resultID

@@ -136,6 +136,25 @@ final class PushPullCutTests: XCTestCase {
         XCTAssertEqual(commits, 2)
     }
 
+    func testTypingExactDepthDuringDragCommitsThatCutOnce() throws {
+        let (view, host, profile) = fixture()
+        let projected = view.projectPoint(SCNVector3(0,3,0))
+        let start = NSPoint(x: projected.x, y: projected.y)
+        let dragged = NSPoint(x: start.x, y: start.y-30)
+        var commits = 0
+        view.onDocumentChange = { _ in commits += 1 }
+        XCTAssertTrue(view.beginProfilePushPull(profileID: profile.id, at: start))
+        view.mouseDragged(with: try mouse(.leftMouseDragged, point: dragged))
+        XCTAssertEqual(view.document.entities.count, 1)
+        view.applyMeasurement("-3")
+        XCTAssertEqual(view.document.entities.map(\.id), [host.id])
+        XCTAssertEqual(try volume(XCTUnwrap(view.document.entities.first)), 45, accuracy: 1e-7)
+        XCTAssertEqual(view.selectedID, host.id)
+        XCTAssertEqual(commits, 1)
+        view.mouseUp(with: try mouse(.leftMouseUp, point: dragged))
+        XCTAssertEqual(commits, 1, "Mouse release must not commit the old drag preview")
+    }
+
     func testVerticalRectangleNormalMatchesDrawingPlaneInEveryQuadrant() throws {
         for plane in ["front", "right"] {
             for width in [-1, 1] {
