@@ -44,6 +44,14 @@ Use **File → Import/Export Compatibility** to see which directions are usable 
 
 Native SKP exchange preserves supported static geometry and appearance and flattens hierarchy. Full SketchUp editing state, third-party Ruby extensions, native VCarve CRV jobs and CNC toolpaths are unsupported. See [interoperability](INTEROPERABILITY.md) for detailed limits.
 
+## Cut an opening
+
+Draw a smaller closed rectangle, circle or polygon directly on a solid face, then use **P — Push/Pull** on that shape. An inward push now removes material from the supporting solid. A shallow push makes a recess; reaching or exceeding the solid's thickness makes a through-hole without leaving a closing face at the far side.
+
+For an exact depth, select the newly drawn shape, choose Push/Pull and enter a negative measurement such as `-100mm`. Immediately typing another depth replaces that same cut, so you can deepen a recess into a through-hole after dragging. Undo restores the solid and drawn shape together; Escape cancels an uncommitted drag.
+
+This operation supports retained extrusion end faces and rectangular-block side faces, within the same editing group. Locked or ambiguous overlapping targets reject the edit. Arbitrary imported meshes and additional independent cuts into a blind-pocket mesh require more general solid modeling and remain unsupported; the app reports this instead of silently adding an overlapping solid. Through-hole results retain their extrusion profile and can accept further non-overlapping holes on the same end face.
+
 ## Build from source
 
 Install Xcode with its command-line tools and select its developer directory. The package uses Swift tools 5.9 or later and macOS 13 or later. No external Swift packages are required for the built-in codecs.

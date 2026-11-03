@@ -9,6 +9,58 @@ public struct FaceProfile: Codable, Equatable {
 }
 
 public enum GeometryTools {
+    /// Pushes a retained profile, cutting a supporting solid when the movement goes inward.
+    /// Cuts are bounded to extrusion end caps and rectangular-prism sides, not arbitrary mesh booleans.
+    public static func pushPull(document: ModelDocument, profileID: UUID, distance: Double, editingGroupID: UUID? = nil) throws -> ModelDocument {
+        try document.validate()
+        guard distance.isFinite,abs(distance)<=1_000_000,
+              let index=document.entities.firstIndex(where:{$0.id==profileID}),
+              document.entities[index].isEditable(in:document),document.entities[index].isVisible(in:document) else {
+            throw GeometryIOError.invalid("Select an unlocked profile and enter a finite extrusion distance.")
+        }
+        let source=document.entities[index]
+        let profile=try worldProfile(of:source),surface=try PGSurface(profile)
+        let sourceMesh=try source.triangulatedMesh()
+        let flat=sourceMesh.vertices.allSatisfy{abs(pgDot(pgSub($0,surface.plane.origin),surface.plane.n))<=surface.plane.epsilon}
+        var result=document
+        if flat,abs(distance)>surface.plane.epsilon {
+            var candidates:[(Int,PGSurface,Double,Double)]=[]
+            for i in document.entities.indices where i != index {
+                let host=document.entities[i]
+                guard host.metadata?.groupID == source.metadata?.groupID,host.isVisible(in:document) else {continue}
+                if let editingGroupID,host.metadata?.groupID != editingGroupID {continue}
+                guard let entry=try pgCutEntry(host:host,cutter:surface) else {
+                    if try pgTouchesInwardFace(host:host,cutter:surface,distance:distance) {
+                        throw GeometryIOError.unsupported("This solid has no editable extrusion profile for this cut. Use an extrusion end face or a rectangular block; arbitrary mesh cuts are not supported.")
+                    }
+                    continue
+                }
+                let depth = -pgDot(pgMul(surface.plane.n,distance),entry.0.plane.n)
+                guard depth>entry.0.plane.epsilon else {continue}
+                let boundary=entry.0.profile.outer.map(entry.0.plane.project),cut=profile.outer.map(entry.0.plane.project)
+                let overlaps=cut.contains{pgInside($0,boundary)} || boundary.contains{pgInside($0,cut)} || cut.indices.contains { a in
+                    boundary.indices.contains { b in pgIntersects(cut[a],cut[(a+1)%cut.count],boundary[b],boundary[(b+1)%boundary.count],epsilon:entry.0.plane.epsilon) }
+                }
+                guard overlaps else {continue}
+                guard host.isEditable(in:document) else {throw GeometryIOError.invalid("The solid under this profile is locked. Unlock it before cutting.")}
+                guard profile.holes.isEmpty else {throw GeometryIOError.unsupported("Use a single closed outline for an inward cut.")}
+                // Validates complete containment, existing holes and non-touching boundaries before mutation.
+                _ = try PGSurface(FaceProfile(outer:entry.0.profile.outer,holes:entry.0.profile.holes+[profile.outer]))
+                candidates.append((i,entry.0,entry.1,depth))
+            }
+            guard candidates.count<=1 else {throw GeometryIOError.unsupported("More than one solid lies under this profile. Isolate the solid before cutting.")}
+            if let (hostIndex,entry,thickness,depth)=candidates.first {
+                result.entities[hostIndex]=try pgCutPocket(host:document.entities[hostIndex],entry:entry,thickness:thickness,outline:profile.outer,depth:depth)
+                result.entities.removeAll{$0.id==source.id}
+                try result.validate()
+                return result
+            }
+        }
+        result.entities[index]=try extrude(entity:source,distance:distance)
+        try result.validate()
+        return result
+    }
+
     /// Adds a connected edge, automatically closes simple planar loops, and splits crossed faces.
     public static func connectLine(document: ModelDocument, start: Vec3, end: Vec3, tolerance: Double = 1e-6, editingGroupID: UUID? = nil) throws -> ModelDocument {
         try document.validate()
@@ -450,6 +502,95 @@ private func pgBasePoints(_ points:[Vec3],entity:GardenEntity,plane:PGPlane) thr
     if offsets.allSatisfy({abs($0)<=plane.epsilon}) {return points}
     if let distance=pgExtrusion(entity),offsets.allSatisfy({abs($0-distance)<=plane.epsilon}) {return points.map{pgSub($0,pgMul(plane.n,distance))}}
     throw GeometryIOError.invalid("Edit points must lie in the face plane or its extruded end cap.")
+}
+
+/// An unsupported surface must reject instead of silently adding an overlapping solid.
+private func pgTouchesInwardFace(host:GardenEntity,cutter:PGSurface,distance:Double) throws ->Bool {
+    let mesh=try host.triangulatedMesh(),plane=cutter.plane,e=plane.epsilon
+    guard mesh.vertices.contains(where:{abs(pgDot(pgSub($0,plane.origin),plane.n))>e}) else {return false}
+    let boundary=cutter.profile.outer.map(plane.project)
+    for i in stride(from:0,to:mesh.triangles.count,by:3) {
+        let points=(0..<3).map{mesh.vertices[mesh.triangles[i+$0]]}
+        guard points.allSatisfy({abs(pgDot(pgSub($0,plane.origin),plane.n))<=e}) else {continue}
+        let orientation=pgDot(pgCross(pgSub(points[1],points[0]),pgSub(points[2],points[0])),plane.n)
+        guard orientation*distance < -e*e else {continue}
+        var triangle=points.map(plane.project)
+        if orientation<0 {triangle.reverse()}
+        if boundary.contains(where:{pgTriangleContains($0,triangle[0],triangle[1],triangle[2],epsilon:e*e)}) ||
+            triangle.contains(where:{pgInside($0,boundary)}) || boundary.indices.contains(where:{a in
+                triangle.indices.contains {b in pgIntersects(boundary[a],boundary[(a+1)%boundary.count],triangle[b],triangle[(b+1)%3],epsilon:e)}
+            }) {return true}
+    }
+    return false
+}
+
+/// Returns the host face at the cutter plane, wound outward, and the solid thickness.
+private func pgCutEntry(host:GardenEntity,cutter:PGSurface) throws ->(PGSurface,Double)? {
+    guard let profile=try? GeometryTools.worldProfile(of:host),let extrusion=pgExtrusion(host),abs(extrusion)>cutter.plane.epsilon else {return nil}
+    let base=try PGSurface(profile),normal=base.plane.n,e=max(base.plane.epsilon,cutter.plane.epsilon)
+    let offsets=cutter.profile.outer.map{pgDot(pgSub($0,base.plane.origin),normal)}
+    let atBase=offsets.allSatisfy{abs($0)<=e},atEnd=offsets.allSatisfy{abs($0-extrusion)<=e}
+    if abs(pgDot(normal,cutter.plane.n))>0.999999,atBase || atEnd {
+        let offset=atEnd ? extrusion:0
+        let reverse=atEnd ? extrusion<0:extrusion>0
+        func ring(_ points:[Vec3])->[Vec3] {
+            let shifted=points.map{pgAdd($0,pgMul(normal,offset))}
+            return reverse ? Array(shifted.reversed()):shifted
+        }
+        return (try PGSurface(FaceProfile(outer:ring(profile.outer),holes:profile.holes.map(ring))),abs(extrusion))
+    }
+    // A rectangular prism can also be parameterized from a side face. Other side
+    // contours need a solid Boolean kernel and must not be treated as end caps.
+    guard profile.holes.isEmpty,profile.outer.count==4 else {return nil}
+    let edges=profile.outer.indices.map{pgSub(profile.outer[($0+1)%4],profile.outer[$0])}
+    guard edges.indices.allSatisfy({abs(pgDot(edges[$0],edges[($0+1)%4]))<=e*max(1,pgLength(edges[$0])*pgLength(edges[($0+1)%4]))}) else {return nil}
+    let mesh=try host.triangulatedMesh(),distances=mesh.vertices.map{pgDot(pgSub($0,cutter.plane.origin),cutter.plane.n)}
+    guard let low=distances.min(),let high=distances.max(),high-low>e,
+          abs(low)<=e || abs(high)<=e else {return nil}
+    var points:[Vec3]=[]
+    for (point,offset) in zip(mesh.vertices,distances) where abs(offset)<=e {
+        if !points.contains(where:{pgLength(pgSub($0,point))<=e}) {points.append(point)}
+    }
+    guard points.count==4 else {return nil}
+    let center=points.map(cutter.plane.project).reduce(PGPoint(0,0),+)*0.25
+    points.sort{let a=cutter.plane.project($0)-center,b=cutter.plane.project($1)-center;return atan2(a.y,a.x)<atan2(b.y,b.x)}
+    if abs(low)<=e {points.reverse()}
+    return (try PGSurface(FaceProfile(outer:points)),high-low)
+}
+
+private func pgCutPocket(host:GardenEntity,entry:PGSurface,thickness:Double,outline:[Vec3],depth:Double) throws ->GardenEntity {
+    let ring=try PGSurface(FaceProfile(outer:entry.profile.outer,holes:entry.profile.holes+[outline]))
+    if depth>=thickness-entry.plane.epsilon {
+        let face=try GeometryTools.face(points:ring.profile.outer,holes:ring.profile.holes,name:host.name,colorHex:host.colorHex)
+        return pgPreserve(try GeometryTools.extrude(entity:face,distance:-thickness),from:host)
+    }
+    var mesh=MeshData(vertices:[])
+    let normal=entry.plane.n
+    func cap(_ surface:PGSurface,offset:Double,forward:Bool) {
+        let start=mesh.vertices.count
+        mesh.vertices += surface.mesh.vertices.map{pgAdd($0,pgMul(normal,offset))}
+        for i in stride(from:0,to:surface.mesh.triangles.count,by:3) {
+            let a=surface.mesh.triangles[i]+start,b=surface.mesh.triangles[i+1]+start,c=surface.mesh.triangles[i+2]+start
+            mesh.triangles += forward ? [a,b,c]:[a,c,b]
+        }
+    }
+    func walls(_ surface:PGSurface,loops:[[Int]],bottom:Double,top:Double) {
+        for loop in loops {
+            for i in loop.indices {
+                let a=surface.mesh.vertices[loop[i]],b=surface.mesh.vertices[loop[(i+1)%loop.count]],start=mesh.vertices.count
+                mesh.vertices += [pgAdd(a,pgMul(normal,bottom)),pgAdd(b,pgMul(normal,bottom)),pgAdd(b,pgMul(normal,top)),pgAdd(a,pgMul(normal,top))]
+                mesh.triangles += [start,start+1,start+2,start,start+2,start+3]
+            }
+        }
+    }
+    cap(ring,offset:0,forward:true)
+    cap(entry,offset:-thickness,forward:false)
+    walls(entry,loops:entry.loops,bottom:-thickness,top:0)
+    walls(ring,loops:[ring.loops.last!],bottom:-depth,top:0)
+    var floor=outline
+    if pgDot(try PGPlane(outer:floor).n,normal)<0 {floor.reverse()}
+    cap(try PGSurface(FaceProfile(outer:floor)),offset:-depth,forward:true)
+    return pgPreserve(try pgEntity(mesh:mesh,profile:nil,name:host.name,color:host.colorHex,identity:host.id),from:host)
 }
 
 private func pgExtrusion(_ entity:GardenEntity)->Double? {

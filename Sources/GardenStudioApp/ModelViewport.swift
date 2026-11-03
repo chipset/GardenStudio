@@ -24,6 +24,8 @@ enum ModelingTool: String, CaseIterable {
 final class ModelViewport: SCNView {
     var tool: ModelingTool = .select { didSet { cancelOperation(); updateCursor(); showToolHint() } }
     var document = ModelDocument() { didSet {
+        if let edit=lastCutMeasurement,
+           document.entities != edit.result.entities || document.editor != edit.result.editor {lastCutMeasurement=nil}
         if let axes=document.presentation?.drawingAxes {drawingPlane=Plane(origin:axes.origin,u:axes.xAxis,v:axes.yAxis,n:axes.normal)}
         else {drawingPlane=Plane(origin:Vec3(0,0,0),u:Vec3(1,0,0),v:Vec3(0,0,1),n:Vec3(0,1,0))}
         updateAxisIndicators()
@@ -40,12 +42,14 @@ final class ModelViewport: SCNView {
     } }
     var selectedID: UUID? { didSet {
         guard !syncingSelection else { return }
+        if let edit=lastCutMeasurement,selectedID != edit.resultID {lastCutMeasurement=nil}
         syncingSelection = true
         if let id = selectedID { if !selectedIDs.contains(id) { selectedIDs = [id] } } else { selectedIDs = [] }
         syncingSelection = false; clearFaceSelectionIfOwnerChanged(); rebuildEntities()
     } }
     var selectedIDs: Set<UUID> = [] { didSet {
         guard !syncingSelection else { return }
+        if let edit=lastCutMeasurement,selectedIDs != [edit.resultID] {lastCutMeasurement=nil}
         syncingSelection = true
         if selectedID == nil || !selectedIDs.contains(selectedID!) { selectedID = selectedIDs.sorted { $0.uuidString < $1.uuidString }.first }
         syncingSelection = false; clearFaceSelectionIfOwnerChanged(); rebuildEntities()
@@ -71,6 +75,14 @@ final class ModelViewport: SCNView {
     private var inferencePoints: [(Vec3, String)] = []
     private let inferenceMarker = SCNNode()
     private var pickedProfile: GardenEntity?
+    private struct CutMeasurement {
+        var original: ModelDocument
+        var profileID: UUID
+        var resultID: UUID
+        var result: ModelDocument
+    }
+    private var lastCutMeasurement: CutMeasurement?
+    private var pendingCutSelectionID: UUID?
     private var boxSelecting = false
     private var selectionBeforeBox: Set<UUID> = []
     private let selectionBox = CAShapeLayer()
@@ -519,15 +531,24 @@ final class ModelViewport: SCNView {
         }
     }
     private func entityHit(_ point: NSPoint) -> (GardenEntity,SCNHitTestResult)? {
+        var nearest: (GardenEntity,SCNHitTestResult)?
         for hit in hitTest(point,options:[.categoryBitMask:2,.searchMode:SCNHitTestSearchMode.all.rawValue]) {
             if let section=document.presentation?.section,section.enabled,let signed=try? section.signedDistance(to:vec(hit.worldCoordinates)),signed>0 {continue}
             var node: SCNNode? = hit.node
             while let current = node {
-                if let name=current.name, let id=UUID(uuidString:name), let entity=document.entities.first(where:{$0.id==id}), entity.isVisible(in:document),editingGroupID == nil || !document.effectiveSelection([entity.id],editingGroupID:editingGroupID).isEmpty { return (entity,hit) }
+                if let name=current.name, let id=UUID(uuidString:name), let entity=document.entities.first(where:{$0.id==id}), entity.isVisible(in:document),editingGroupID == nil || !document.effectiveSelection([entity.id],editingGroupID:editingGroupID).isEmpty {
+                    if nearest == nil {nearest=(entity,hit)}
+                    // A newly drawn profile shares its host's plane. Prefer that selected
+                    // profile only at the nearest surface, never through a nearer object.
+                    if tool == .pushPull,entity.id == selectedID,isFlatProfile(entity),entity.isEditable(in:document),entity.metadata?.groupID == editingGroupID,
+                       let first=nearest,length(sub(vec(hit.worldCoordinates),vec(first.1.worldCoordinates)))<=max(1e-7,Double(distance)*1e-7) {return (entity,hit)}
+                    if tool != .pushPull {return (entity,hit)}
+                    break
+                }
                 node=current.parent
             }
         }
-        return nil
+        return nearest
     }
     private func faceIndices(for entity: GardenEntity, hit: SCNHitTestResult) -> [Int] {
         guard let geometry=hit.node.geometry,geometry.elements.indices.contains(hit.geometryIndex),geometry.elements[hit.geometryIndex].primitiveType == .triangles else{return []}
@@ -706,8 +727,13 @@ final class ModelViewport: SCNView {
         case .followMe: performSweepAlongSelectedPath()
         case .pushPull,.move,.rotate,.scale,.offset:
             guard let entity,entity.isEditable(in:document) else { onStatus?("Select an unlocked object.");return }
+            if tool == .pushPull,isFlatProfile(entity) {
+                _ = beginProfilePushPull(profileID:entity.id,at:point)
+                onStatus?("Drag to pushPull, or enter a measurement. Shift selects multiple objects.")
+                return
+            }
             if !selectedIDs.contains(entity.id) { choose(entity.id) }
-            dragEntity=entity;dragDocument=document;dragGround=groundPoint(point);pickedProfile=nil
+            dragEntity=entity;dragDocument=document;dragGround=groundPoint(point);pickedProfile=nil;pendingCutSelectionID=nil;lastCutMeasurement=nil
             if tool == .move {
                 vertexDragPoint=nil
                 if event.modifierFlags.contains(.control) {
@@ -734,6 +760,18 @@ final class ModelViewport: SCNView {
             onStatus?("Drag to \(tool.rawValue), or enter a measurement. Shift selects multiple objects.")
         default:break
         }
+    }
+    /// Starts the flat-profile edit independently of hit testing; mouse picking and
+    /// deterministic edit tests share the same baseline and cancellation state.
+    @discardableResult
+    func beginProfilePushPull(profileID:UUID,at point:NSPoint)->Bool {
+        guard tool == .pushPull,let entity=document.entities.first(where:{$0.id==profileID}),
+              isFlatProfile(entity),entity.isEditable(in:document),entity.isVisible(in:document),
+              editingGroupID == nil || !document.effectiveSelection([profileID],editingGroupID:editingGroupID).isEmpty else{return false}
+        if !selectedIDs.contains(profileID) {choose(profileID)}
+        dragStart=point;previousMouse=point;dragEntity=entity;dragDocument=document;dragGround=groundPoint(point)
+        pickedProfile=nil;pendingCutSelectionID=nil;lastCutMeasurement=nil;vertexDragPoint=nil;cameraGesture=false
+        return true
     }
     private func append(_ source: GardenEntity) {
         var entity=source
@@ -778,13 +816,17 @@ final class ModelViewport: SCNView {
         if tool == .circle {
             let radius=length(delta)
             guard radius>1e-7 else { throw GeometryIOError.invalid("Circle radius must be positive.") }
-            if abs(plane.n.y)>0.999 { return GardenEntity(name:"Circle",kind:.circle,origin:a,width:radius*2,depth:radius*2) }
-            return try GeometryTools.face(points:(0..<48).map { i in let angle=Double(i)*2 * .pi/48;return add(a,add(mul(plane.u,cos(angle)*radius),mul(plane.v,sin(angle)*radius))) },name:"Circle")
+            if plane.n.y>0.999 { return GardenEntity(name:"Circle",kind:.circle,origin:a,width:radius*2,depth:radius*2) }
+            var outline=(0..<48).map { i in let angle=Double(i)*2 * .pi/48;return add(a,add(mul(plane.u,cos(angle)*radius),mul(plane.v,sin(angle)*radius))) }
+            if dot(cross(sub(outline[1],outline[0]),sub(outline[2],outline[0])),plane.n)<0 {outline.reverse()}
+            return try GeometryTools.face(points:outline,name:"Circle")
         }
         let du=dot(delta,plane.u),dv=dot(delta,plane.v)
         guard abs(du)>1e-7,abs(dv)>1e-7 else { throw GeometryIOError.invalid("Rectangle needs nonzero width and depth.") }
-        if abs(plane.n.y)>0.999,abs(plane.u.x)>0.999 { return GardenEntity(name:"Rectangle",kind:.rectangle,origin:mul(add(a,b),0.5),width:abs(delta.x),depth:abs(delta.z)) }
-        return try GeometryTools.face(points:[a,add(a,mul(plane.u,du)),b,add(a,mul(plane.v,dv))],name:"Rectangle")
+        if plane.n.y>0.999,abs(plane.u.x)>0.999 { return GardenEntity(name:"Rectangle",kind:.rectangle,origin:mul(add(a,b),0.5),width:abs(delta.x),depth:abs(delta.z)) }
+        var corners=[a,add(a,mul(plane.u,du)),b,add(a,mul(plane.v,dv))]
+        if dot(cross(sub(corners[1],a),sub(corners[2],a)),plane.n)<0 {corners.reverse()}
+        return try GeometryTools.face(points:corners,name:"Rectangle")
     }
     private func finishProfile() {
         guard points.count>=3 else { onStatus?("A face needs at least three corners.");return }
@@ -835,8 +877,9 @@ final class ModelViewport: SCNView {
                 let value=base+Double(point.y-dragStart.y)*Double(distance)/600
                 if let face=pickedProfile {
                     var extruded=try GeometryTools.extrude(entity:face,distance:value);extruded.name="Face extrusion";next.entities.append(extruded)
-                } else if let index=next.entities.firstIndex(where:{$0.id==original.id}) {
-                    next.entities[index]=try GeometryTools.extrude(entity:original,distance:value)
+                } else {
+                    next=try GeometryTools.pushPull(document:before,profileID:original.id,distance:value,editingGroupID:editingGroupID)
+                    pendingCutSelectionID=cutResultID(original:before,result:next,profileID:original.id)
                 }
             case .move:
                 guard let start=dragGround,let end=groundPoint(point) else {return}
@@ -867,10 +910,16 @@ final class ModelViewport: SCNView {
         if let before=dragDocument,before != document {
             let old=Set(before.entities.map(\.id))
             let created=pickedProfile == nil ? nil : document.entities.last(where:{!old.contains($0.id)})?.id
+            let cutID=pendingCutSelectionID,profileID=dragEntity?.id,finished=document
             onDocumentChange?(document)
-            if let created {choose(created);pickedProfile=nil}
+            if let cutID,let profileID,document.entities.contains(where:{$0.id==cutID}),!document.entities.contains(where:{$0.id==profileID}) {
+                choose(cutID)
+                if document.entities == finished.entities {
+                    lastCutMeasurement=CutMeasurement(original:before,profileID:profileID,resultID:cutID,result:document)
+                }
+            } else if let created {choose(created);pickedProfile=nil}
         }
-        dragEntity=nil;dragDocument=nil;dragGround=nil;cameraGesture=false
+        dragEntity=nil;dragDocument=nil;dragGround=nil;pendingCutSelectionID=nil;cameraGesture=false
         if tool == .move {anchor=nil;activePlane=nil;vertexDragPoint=nil;preview.childNodes.forEach{$0.removeFromParentNode()}}
         updateCursor()
     }
@@ -1047,12 +1096,19 @@ final class ModelViewport: SCNView {
     func cancelOperation() {
         clearDrawing();inferenceMarker.childNodes.forEach{$0.removeFromParentNode()}
         if let original=dragDocument {document=original}
-        dragDocument=nil;dragEntity=nil;dragGround=nil;pickedProfile=nil;vertexDragPoint=nil;boxSelecting=false;selectionBox.path=nil;cameraGesture=false;axisConstraint=nil;shiftConstraint=nil;showToolHint()
+        dragDocument=nil;dragEntity=nil;dragGround=nil;pickedProfile=nil;pendingCutSelectionID=nil;lastCutMeasurement=nil;vertexDragPoint=nil;boxSelecting=false;selectionBox.path=nil;cameraGesture=false;axisConstraint=nil;shiftConstraint=nil;showToolHint()
     }
     /// Committed commands and external history changes end an in-flight edit;
     /// otherwise a later Escape could restore its obsolete document snapshot.
     func cancelEditingDrag() {
         if dragDocument != nil {cancelOperation()}
+    }
+    private func cutResultID(original:ModelDocument,result:ModelDocument,profileID:UUID)->UUID? {
+        guard !result.entities.contains(where:{$0.id==profileID}) else{return nil}
+        let resultingEntities=Dictionary(uniqueKeysWithValues:result.entities.map{($0.id,$0)})
+        return original.entities.first {entity in
+            entity.id != profileID && resultingEntities[entity.id].map{$0 != entity} == true
+        }?.id
     }
     func applyMeasurement(_ text: String) {
         let components=text.split(separator:",",omittingEmptySubsequences:false)
@@ -1086,10 +1142,20 @@ final class ModelViewport: SCNView {
             default:break
             }
             guard let id=selectedID,let index=document.entities.firstIndex(where:{$0.id==id}),document.entities[index].isEditable(in:document) else {onStatus?("Select an unlocked object first.");return}
-            var next=document,newExtrusionID:UUID?
+            var next=document,newExtrusionID:UUID?,cutOriginal:ModelDocument?,cutProfileID:UUID?,pushPullSelectionID:UUID?
             if tool == .pushPull {
                 if let pickedProfile {var shape=try GeometryTools.extrude(entity:pickedProfile,distance:values[0]);shape.name="Face extrusion";next.entities.append(shape);newExtrusionID=shape.id}
-                else {next.entities[index]=try GeometryTools.extrude(entity:next.entities[index],distance:values[0])}
+                else {
+                    var baseline=lastCutMeasurement?.original ?? document
+                    // Retyping a depth replaces the preceding cut from its original
+                    // profile, while preserving any intervening camera navigation.
+                    baseline.presentation=document.presentation
+                    let profileID=lastCutMeasurement?.profileID ?? id
+                    next=try GeometryTools.pushPull(document:baseline,profileID:profileID,distance:values[0],editingGroupID:editingGroupID)
+                    if let resultID=cutResultID(original:baseline,result:next,profileID:profileID) {
+                        cutOriginal=baseline;cutProfileID=profileID;pushPullSelectionID=resultID
+                    } else if next.entities.contains(where:{$0.id==profileID}) {pushPullSelectionID=profileID}
+                }
             } else if next.entities[index].kind == .mesh {
                 onStatus?("Use Scale for mesh dimensions, or Push/Pull for profiled faces.");return
             } else if next.entities[index].kind == .line {
@@ -1104,7 +1170,12 @@ final class ModelViewport: SCNView {
             }
             try next.validate()
             commit(next)
-            if let newExtrusionID {choose(newExtrusionID);pickedProfile=nil}
+            if let pushPullSelectionID {
+                choose(pushPullSelectionID)
+                if let cutOriginal,let cutProfileID,document.entities == next.entities {
+                    lastCutMeasurement=CutMeasurement(original:cutOriginal,profileID:cutProfileID,resultID:pushPullSelectionID,result:document)
+                }
+            } else if let newExtrusionID {choose(newExtrusionID);pickedProfile=nil}
             onStatus?("Dimensions applied.")
         } catch {onStatus?(error.localizedDescription)}
     }
